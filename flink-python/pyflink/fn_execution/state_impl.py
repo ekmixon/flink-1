@@ -352,7 +352,7 @@ def create_cache_iterator(cache_dict, iterate_type, iterated_keys=None):
                 continue
             yield key, (key, value)
     else:
-        raise Exception("Unsupported iterate type: %s" % iterate_type)
+        raise Exception(f"Unsupported iterate type: {iterate_type}")
 
 
 class CachingMapStateHandler(object):
@@ -379,12 +379,12 @@ class CachingMapStateHandler(object):
         self._cached_iterator_num = 0
 
     def _get_cache_token(self):
-        if not self._state_cache.is_cache_enabled():
-            return None
-        if self._context.user_state_cache_token:
-            return self._context.user_state_cache_token
-        else:
-            return self._context.bundle_cache_token
+        return (
+            self._context.user_state_cache_token
+            or self._context.bundle_cache_token
+            if self._state_cache.is_cache_enabled()
+            else None
+        )
 
     def blocking_get(self, state_key, map_key, map_key_encoder, map_value_decoder):
         cache_token = self._get_cache_token()
@@ -401,20 +401,18 @@ class CachingMapStateHandler(object):
             cached_map_state = CachedMapState(self._max_cached_map_key_entries)
             cached_map_state.put(map_key, (exists, value))
             self._state_cache.put(cache_state_key, cache_token, cached_map_state)
-            return exists, value
         else:
             cached_value = cached_map_state.get(map_key)
-            if cached_value is None:
-                if cached_map_state.is_all_data_cached():
-                    return False, None
-
-                # request from remote
-                exists, value = self._get_raw(
-                    state_key, map_key, map_key_encoder, map_value_decoder)
-                cached_map_state.put(map_key, (exists, value))
-                return exists, value
-            else:
+            if cached_value is not None:
                 return cached_value
+            if cached_map_state.is_all_data_cached():
+                return False, None
+
+            # request from remote
+            exists, value = self._get_raw(
+                state_key, map_key, map_key_encoder, map_value_decoder)
+            cached_map_state.put(map_key, (exists, value))
+        return exists, value
 
     def lazy_iterator(self, state_key, iterate_type, map_key_decoder, map_value_decoder,
                       iterated_keys):
@@ -509,12 +507,11 @@ class CachingMapStateHandler(object):
                     map_key_decoder,
                     map_value_decoder)
         else:
-            raise Exception("Unsupported iterate type: %s" % iterate_type)
+            raise Exception(f"Unsupported iterate type: {iterate_type}")
 
     def extend(self, state_key, items: List[Tuple[int, Any, Any]],
                map_key_encoder, map_value_encoder):
-        cache_token = self._get_cache_token()
-        if cache_token:
+        if cache_token := self._get_cache_token():
             # Cache lookup
             cache_state_key = self._convert_to_cache_key(state_key)
             cached_map_state = self._state_cache.get(cache_state_key, cache_token)
@@ -529,7 +526,7 @@ class CachingMapStateHandler(object):
                 elif request_flag == self.SET_VALUE:
                     cached_map_state.put(map_key, (True, map_value))
                 else:
-                    raise Exception("Unknown flag: " + str(request_flag))
+                    raise Exception(f"Unknown flag: {str(request_flag)}")
         return self._append_raw(
             state_key,
             items,
@@ -537,14 +534,13 @@ class CachingMapStateHandler(object):
             map_value_encoder)
 
     def check_empty(self, state_key):
-        cache_token = self._get_cache_token()
-        if cache_token:
+        if cache_token := self._get_cache_token():
             # Cache lookup
             cache_state_key = self._convert_to_cache_key(state_key)
             cached_map_state = self._state_cache.get(cache_state_key, cache_token)
             if cached_map_state is not None:
                 if cached_map_state.is_all_data_cached() and \
-                        len(cached_map_state.get_cached_keys()) == 0:
+                            len(cached_map_state.get_cached_keys()) == 0:
                     return True
                 elif len(cached_map_state.get_cached_keys()) > 0:
                     return False
@@ -555,8 +551,7 @@ class CachingMapStateHandler(object):
         return self._underlying.clear(state_key)
 
     def clear_read_cache(self, state_key):
-        cache_token = self._get_cache_token()
-        if cache_token:
+        if cache_token := self._get_cache_token():
             cache_key = self._convert_to_cache_key(state_key)
             self._state_cache.evict(cache_key, cache_token)
 
@@ -582,7 +577,7 @@ class CachingMapStateHandler(object):
         elif data[0] == self.NOT_EMPTY_FLAG:
             return False
         else:
-            raise Exception("Unknown response flag: " + str(data[0]))
+            raise Exception(f"Unknown response flag: {str(data[0])}")
 
     def _get_raw(self, state_key, map_key, map_key_encoder, map_value_decoder):
         output_stream = coder_impl.create_OutputStream()
@@ -599,7 +594,7 @@ class CachingMapStateHandler(object):
         elif result_flag == self.NOT_EXIST_FLAG:
             return False, None
         else:
-            raise Exception("Unknown response flag: " + str(result_flag))
+            raise Exception(f"Unknown response flag: {str(result_flag)}")
 
     def _iterate_raw(self, state_key, iterate_type, iterator_token,
                      map_key_decoder, map_value_decoder):
@@ -630,13 +625,12 @@ class CachingMapStateHandler(object):
                 # current iteration has finished.
                 self._dec_cached_iterators_num()
         input_stream = coder_impl.create_InputStream(data)
-        if iterate_type == IterateType.ITEMS or iterate_type == IterateType.VALUES:
+        if iterate_type in [IterateType.ITEMS, IterateType.VALUES]:
             # decode both key and value
             current_batch = {}
             while input_stream.size() > 0:
                 key = map_key_decoder(input_stream)
-                is_not_none = input_stream.read_byte()
-                if is_not_none:
+                if is_not_none := input_stream.read_byte():
                     value = map_value_decoder(input_stream)
                 else:
                     value = None
@@ -740,15 +734,15 @@ class InternalSynchronousMapRuntimeState(object):
         else:
             map_key_coder_impl = map_key_coder.get_impl()
         self._map_key_encoder, self._map_key_decoder = \
-            self._get_encoder_and_decoder(map_key_coder_impl)
+                self._get_encoder_and_decoder(map_key_coder_impl)
         self._map_value_coder = map_value_coder
         if isinstance(map_value_coder, FieldCoder):
             map_value_coder_impl = FlinkCoder(map_value_coder).get_impl()
         else:
             map_value_coder_impl = map_value_coder.get_impl()
         self._map_value_encoder, self._map_value_decoder = \
-            self._get_encoder_and_decoder(map_value_coder_impl)
-        self._write_cache = dict()
+                self._get_encoder_and_decoder(map_value_coder_impl)
+        self._write_cache = {}
         self._max_write_cache_entries = max_write_cache_entries
         self._is_empty = None
         self._cleared = False
@@ -759,18 +753,12 @@ class InternalSynchronousMapRuntimeState(object):
             return None
         if map_key in self._write_cache:
             exists, value = self._write_cache[map_key]
-            if exists:
-                return value
-            else:
-                return None
+            return value if exists else None
         if self._cleared:
             return None
         exists, value = self._map_state_handler.blocking_get(
             self._state_key, map_key, self._map_key_encoder, self._map_value_decoder)
-        if exists:
-            return value
-        else:
-            return None
+        return value if exists else None
 
     def put(self, map_key, map_value):
         self._write_cache[map_key] = (True, map_value)
@@ -802,12 +790,7 @@ class InternalSynchronousMapRuntimeState(object):
             self.commit()
 
     def contains(self, map_key):
-        if self._is_empty:
-            return False
-        if self.get(map_key) is None:
-            return False
-        else:
-            return True
+        return False if self._is_empty else self.get(map_key) is not None
 
     def is_empty(self):
         if self._is_empty is None:
@@ -1024,7 +1007,7 @@ class RemoteKeyedStateBackend(object):
                 raise Exception("The state name '%s' is already in use and not a %s."
                                 % (name, expected_type))
             if state._value_coder != coder:
-                raise Exception("State name corrupted: %s" % name)
+                raise Exception(f"State name corrupted: {name}")
 
     def validate_map_state(self, name, map_key_coder, map_value_coder):
         if name in self._all_states:
@@ -1033,8 +1016,8 @@ class RemoteKeyedStateBackend(object):
                 raise Exception("The state name '%s' is already in use and not a map state."
                                 % name)
             if state._map_key_coder != map_key_coder or \
-                    state._map_value_coder != map_value_coder:
-                raise Exception("State name corrupted: %s" % name)
+                        state._map_value_coder != map_value_coder:
+                raise Exception(f"State name corrupted: {name}")
 
     def _wrap_internal_bag_state(
             self, name, element_coder, wrapper_type, wrap_method, ttl_config):
@@ -1060,8 +1043,7 @@ class RemoteKeyedStateBackend(object):
         if isinstance(element_coder, FieldCoder):
             element_coder = FlinkCoder(element_coder)
         state_spec = userstate.BagStateSpec(name, element_coder)
-        internal_state = self._create_bag_state(state_spec, encoded_namespace, ttl_config)
-        return internal_state
+        return self._create_bag_state(state_spec, encoded_namespace, ttl_config)
 
     def _get_internal_map_state(
             self, name, namespace, map_key_coder, map_value_coder, ttl_config, cache_type):
@@ -1070,19 +1052,28 @@ class RemoteKeyedStateBackend(object):
             (name, self._encoded_current_key, encoded_namespace))
         if cached_state is not None:
             return cached_state
-        internal_map_state = self._create_internal_map_state(
-            name, encoded_namespace, map_key_coder, map_value_coder, ttl_config, cache_type)
-        return internal_map_state
+        return self._create_internal_map_state(
+            name,
+            encoded_namespace,
+            map_key_coder,
+            map_value_coder,
+            ttl_config,
+            cache_type,
+        )
 
-    def _create_bag_state(self, state_spec: userstate.StateSpec, encoded_namespace, ttl_config) \
-            -> userstate.AccumulatingRuntimeState:
+    def _create_bag_state(self, state_spec: userstate.StateSpec, encoded_namespace, ttl_config) -> userstate.AccumulatingRuntimeState:
         if isinstance(state_spec, userstate.BagStateSpec):
-            bag_state = SynchronousBagRuntimeState(
+            return SynchronousBagRuntimeState(
                 self._state_handler,
                 state_key=self.get_bag_state_key(
-                    state_spec.name, self._encoded_current_key, encoded_namespace, ttl_config),
-                value_coder=state_spec.coder)
-            return bag_state
+                    state_spec.name,
+                    self._encoded_current_key,
+                    encoded_namespace,
+                    ttl_config,
+                ),
+                value_coder=state_spec.coder,
+            )
+
         else:
             raise NotImplementedError(state_spec)
 
@@ -1113,11 +1104,11 @@ class RemoteKeyedStateBackend(object):
             write_cache_size)
 
     def _encode_namespace(self, namespace):
-        if namespace is not None:
-            encoded_namespace = self._namespace_coder_impl.encode(namespace)
-        else:
-            encoded_namespace = b''
-        return encoded_namespace
+        return (
+            self._namespace_coder_impl.encode(namespace)
+            if namespace is not None
+            else b''
+        )
 
     def cache_internal_state(self, encoded_key, internal_kv_state: SynchronousKvRuntimeState):
         encoded_old_namespace = self._encode_namespace(internal_kv_state.namespace)
@@ -1159,8 +1150,7 @@ class RemoteKeyedStateBackend(object):
         self.commit_internal_state(state.get_internal_state())
         encoded_target_namespace = self._encode_namespace(target)
         encoded_namespaces = [encoded_target_namespace]
-        for source in sources:
-            encoded_namespaces.append(self._encode_namespace(source))
+        encoded_namespaces.extend(self._encode_namespace(source) for source in sources)
         self.clear_state_cache(state, encoded_namespaces)
 
         state_key = self.get_bag_state_key(
@@ -1172,8 +1162,9 @@ class RemoteKeyedStateBackend(object):
         for encoded_namespace in encoded_namespaces:
             encoded_namespaces_writer.write(encoded_namespace)
         sources_bytes = encoded_namespaces_writer.getvalue()
-        to_await = self._map_state_handler._underlying.append_raw(state_key, sources_bytes)
-        if to_await:
+        if to_await := self._map_state_handler._underlying.append_raw(
+            state_key, sources_bytes
+        ):
             to_await.get()
 
     def clear_state_cache(self, state: SynchronousMergingRuntimeState, encoded_namespaces):

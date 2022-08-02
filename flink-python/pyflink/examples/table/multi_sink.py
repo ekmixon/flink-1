@@ -52,7 +52,10 @@ def multi_sink():
     statement_set = t_env.create_statement_set()
 
     # emit the data with id <= 3 to the "first_sink" via sql statement
-    statement_set.add_insert_sql("INSERT INTO first_sink SELECT * FROM %s WHERE id <= 3" % table)
+    statement_set.add_insert_sql(
+        f"INSERT INTO first_sink SELECT * FROM {table} WHERE id <= 3"
+    )
+
 
     # emit the data which contains "Flink" to the "second_sink"
     @udf(result_type=DataTypes.BOOLEAN())

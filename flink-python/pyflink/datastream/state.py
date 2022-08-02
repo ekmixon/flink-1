@@ -546,26 +546,19 @@ class StateTtlConfig(object):
         update_type = StateTtlConfig.UpdateType._from_proto(proto.update_type)
         state_visibility = StateTtlConfig.StateVisibility._from_proto(proto.state_visibility)
         ttl_time_characteristic = \
-            StateTtlConfig.TtlTimeCharacteristic._from_proto(proto.ttl_time_characteristic)
+                StateTtlConfig.TtlTimeCharacteristic._from_proto(proto.ttl_time_characteristic)
         ttl = Time.milliseconds(proto.ttl)
         cleanup_strategies = StateTtlConfig.CleanupStrategies._from_proto(proto.cleanup_strategies)
         builder = StateTtlConfig.new_builder(ttl) \
-            .set_update_type(update_type) \
-            .set_state_visibility(state_visibility) \
-            .set_ttl_time_characteristic(ttl_time_characteristic)
+                .set_update_type(update_type) \
+                .set_state_visibility(state_visibility) \
+                .set_ttl_time_characteristic(ttl_time_characteristic)
         builder._strategies = cleanup_strategies._strategies
         builder._is_cleanup_in_background = cleanup_strategies._is_cleanup_in_background
         return builder.build()
 
     def __repr__(self):
-        return "StateTtlConfig<" \
-               "update_type={}," \
-               " state_visibility={}," \
-               "ttl_time_characteristic ={}," \
-               "ttl={}>".format(self._update_type,
-                                self._state_visibility,
-                                self._ttl_time_characteristic,
-                                self._ttl)
+        return f"StateTtlConfig<update_type={self._update_type}, state_visibility={self._state_visibility},ttl_time_characteristic ={self._ttl_time_characteristic},ttl={self._ttl}>"
 
     class Builder(object):
         """
@@ -814,10 +807,10 @@ class StateTtlConfig(object):
                     self._strategies)
 
         def get_incremental_cleanup_strategy(self) \
-                -> 'StateTtlConfig.CleanupStrategies.IncrementalCleanupStrategy':
+                        -> 'StateTtlConfig.CleanupStrategies.IncrementalCleanupStrategy':
             if self._is_cleanup_in_background:
                 default_strategy = \
-                    StateTtlConfig.CleanupStrategies.IncrementalCleanupStrategy(5, False)
+                            StateTtlConfig.CleanupStrategies.IncrementalCleanupStrategy(5, False)
             else:
                 default_strategy = None
             return self._strategies.get(  # type: ignore
@@ -825,10 +818,10 @@ class StateTtlConfig(object):
                 default_strategy)
 
         def get_rocksdb_compact_filter_cleanup_strategy(self) \
-                -> 'StateTtlConfig.CleanupStrategies.RocksdbCompactFilterCleanupStrategy':
+                        -> 'StateTtlConfig.CleanupStrategies.RocksdbCompactFilterCleanupStrategy':
             if self._is_cleanup_in_background:
                 default_strategy = \
-                    StateTtlConfig.CleanupStrategies.RocksdbCompactFilterCleanupStrategy(1000)
+                            StateTtlConfig.CleanupStrategies.RocksdbCompactFilterCleanupStrategy(1000)
             else:
                 default_strategy = None
             return self._strategies.get(  # type: ignore
@@ -850,17 +843,17 @@ class StateTtlConfig(object):
                     cleanup_strategy.empty_strategy = empty_strategy
                 elif isinstance(v, CleanupStrategies.IncrementalCleanupStrategy):
                     incremental_cleanup_strategy = \
-                        DescriptorCleanupStrategies.IncrementalCleanupStrategy()
+                                DescriptorCleanupStrategies.IncrementalCleanupStrategy()
                     incremental_cleanup_strategy.cleanup_size = v._cleanup_size
                     incremental_cleanup_strategy.run_cleanup_for_every_record = \
-                        v._run_cleanup_for_every_record
+                                v._run_cleanup_for_every_record
                     cleanup_strategy.incremental_cleanup_strategy.CopyFrom(
                         incremental_cleanup_strategy)
                 elif isinstance(v, CleanupStrategies.RocksdbCompactFilterCleanupStrategy):
                     rocksdb_compact_filter_cleanup_strategy = \
-                        DescriptorCleanupStrategies.RocksdbCompactFilterCleanupStrategy()
+                                DescriptorCleanupStrategies.RocksdbCompactFilterCleanupStrategy()
                     rocksdb_compact_filter_cleanup_strategy.query_time_after_num_entries = \
-                        v._query_time_after_num_entries
+                                v._query_time_after_num_entries
                     cleanup_strategy.rocksdb_compact_filter_cleanup_strategy.CopyFrom(
                         rocksdb_compact_filter_cleanup_strategy)
             return cleanup_strategies
@@ -882,7 +875,7 @@ class StateTtlConfig(object):
                         incremental_cleanup_strategy.run_cleanup_for_every_record)
                 elif strategy_entry.HasField('rocksdb_compact_filter_cleanup_strategy'):
                     rocksdb_compact_filter_cleanup_strategy = \
-                        strategy_entry.rocksdb_compact_filter_cleanup_strategy
+                                strategy_entry.rocksdb_compact_filter_cleanup_strategy
                     strategies[strategy] = CleanupStrategies.RocksdbCompactFilterCleanupStrategy(
                         rocksdb_compact_filter_cleanup_strategy.query_time_after_num_entries)
             return CleanupStrategies(strategies, is_cleanup_in_background)

@@ -130,12 +130,12 @@ def construct_log_settings(env):
     if "LOG4J_PROPERTIES" in env:
         log4j_properties = env["LOG4J_PROPERTIES"]
     else:
-        log4j_properties = "%s/log4j-cli.properties" % flink_conf_dir
+        log4j_properties = f"{flink_conf_dir}/log4j-cli.properties"
 
     if "LOGBACK_XML" in env:
         logback_xml = env["LOGBACK_XML"]
     else:
-        logback_xml = "%s/logback.xml" % flink_conf_dir
+        logback_xml = f"{flink_conf_dir}/logback.xml"
 
     if "FLINK_IDENT_STRING" in env:
         flink_ident_string = env["FLINK_IDENT_STRING"]
@@ -143,15 +143,16 @@ def construct_log_settings(env):
         flink_ident_string = getpass.getuser()
 
     hostname = socket.gethostname()
-    log_settings = []
-    for template in templates:
-        log_settings.append(Template(template).substitute(
+    return [
+        Template(template).substitute(
             log4j_properties=log4j_properties,
             logback_xml=logback_xml,
             flink_log_dir=flink_log_dir,
             flink_ident_string=flink_ident_string,
-            hostname=hostname))
-    return log_settings
+            hostname=hostname,
+        )
+        for template in templates
+    ]
 
 
 def get_jvm_opts(env):
@@ -178,8 +179,10 @@ def construct_flink_classpath(env):
 
     flink_python_jars = glob.glob(os.path.join(flink_opt_directory, "flink-python*.jar"))
     if len(flink_python_jars) < 1:
-        print("The flink-python jar is not found in the opt folder of the FLINK_HOME: %s" %
-              flink_home)
+        print(
+            f"The flink-python jar is not found in the opt folder of the FLINK_HOME: {flink_home}"
+        )
+
         return lib_jars
     flink_python_jar = flink_python_jars[0]
 
@@ -190,17 +193,19 @@ def construct_hadoop_classpath(env):
     flink_conf_file = os.path.join(env['FLINK_CONF_DIR'], "flink-conf.yaml")
 
     hadoop_conf_dir = ""
-    if 'HADOOP_CONF_DIR' not in env and 'HADOOP_CLASSPATH' not in env:
-        if os.path.isdir("/etc/hadoop/conf"):
-            print("Setting HADOOP_CONF_DIR=/etc/hadoop/conf because no HADOOP_CONF_DIR or"
-                  "HADOOP_CLASSPATH was set.")
-            hadoop_conf_dir = "/etc/hadoop/conf"
+    if (
+        'HADOOP_CONF_DIR' not in env
+        and 'HADOOP_CLASSPATH' not in env
+        and os.path.isdir("/etc/hadoop/conf")
+    ):
+        print("Setting HADOOP_CONF_DIR=/etc/hadoop/conf because no HADOOP_CONF_DIR or"
+              "HADOOP_CLASSPATH was set.")
+        hadoop_conf_dir = "/etc/hadoop/conf"
 
     hbase_conf_dir = ""
-    if 'HBASE_CONF_DIR' not in env:
-        if os.path.isdir("/etc/hbase/conf"):
-            print("Setting HBASE_CONF_DIR=/etc/hbase/conf because no HBASE_CONF_DIR was set.")
-            hbase_conf_dir = "/etc/hbase/conf"
+    if 'HBASE_CONF_DIR' not in env and os.path.isdir("/etc/hbase/conf"):
+        print("Setting HBASE_CONF_DIR=/etc/hbase/conf because no HBASE_CONF_DIR was set.")
+        hbase_conf_dir = "/etc/hbase/conf"
 
     return os.pathsep.join(
         [env.get("HADOOP_CLASSPATH", ""),
@@ -230,20 +235,28 @@ def download_apache_avro():
         [mvn, "help:evaluate", "-Dexpression=avro.version"],
         cwd=flink_source_root).decode("utf-8")
     lines = avro_version_output.replace("\r", "").split("\n")
-    avro_version = None
-    for line in lines:
-        if line.strip() != "" and re.match(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$', line.strip()):
-            avro_version = line
-            break
+    avro_version = next(
+        (
+            line
+            for line in lines
+            if line.strip() != ""
+            and re.match(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$', line.strip())
+        ),
+        None,
+    )
+
     if avro_version is None:
         raise Exception("The Apache Avro version is not found in the maven command output:\n %s" %
                         avro_version_output)
     check_output(
-        [mvn,
-         "org.apache.maven.plugins:maven-dependency-plugin:3.2.0:copy",
-         "-Dartifact=org.apache.avro:avro:%s:jar" % avro_version,
-         "-DoutputDirectory=%s/flink-formats/flink-avro/target" % flink_source_root],
-        cwd=flink_source_root)
+        [
+            mvn,
+            "org.apache.maven.plugins:maven-dependency-plugin:3.2.0:copy",
+            f"-Dartifact=org.apache.avro:avro:{avro_version}:jar",
+            f"-DoutputDirectory={flink_source_root}/flink-formats/flink-avro/target",
+        ],
+        cwd=flink_source_root,
+    )
 
 
 def construct_test_classpath():

@@ -74,13 +74,13 @@ if __name__ == "__main__":
     check_not_empty(worker_id, "No id provided.")
     check_not_empty(provision_endpoint, "No provision endpoint provided.")
 
-    logging.info("Initializing Python harness: %s" % " ".join(sys.argv))
+    logging.info(f'Initializing Python harness: {" ".join(sys.argv)}')
 
     if 'PYFLINK_LOOPBACK_SERVER_ADDRESS' in os.environ:
         logging.info("Starting up Python harness in loopback mode.")
 
         params = dict(os.environ)
-        params.update({'SEMI_PERSISTENT_DIRECTORY': semi_persist_dir})
+        params['SEMI_PERSISTENT_DIRECTORY'] = semi_persist_dir
         with grpc.insecure_channel(os.environ['PYFLINK_LOOPBACK_SERVER_ADDRESS']) as channel:
             client = BeamFnExternalWorkerPoolStub(channel=channel)
             request = StartWorkerRequest(

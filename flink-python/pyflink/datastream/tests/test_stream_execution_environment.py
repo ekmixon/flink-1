@@ -222,8 +222,8 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
     @unittest.skip("Python API does not support DataStream now. refactor this test later")
     def test_get_execution_plan(self):
         tmp_dir = tempfile.gettempdir()
-        source_path = os.path.join(tmp_dir + '/streaming.csv')
-        tmp_csv = os.path.join(tmp_dir + '/streaming2.csv')
+        source_path = os.path.join(f'{tmp_dir}/streaming.csv')
+        tmp_csv = os.path.join(f'{tmp_dir}/streaming2.csv')
         field_names = ["a", "b", "c"]
         field_types = [DataTypes.INT(), DataTypes.STRING(), DataTypes.STRING()]
 
@@ -246,8 +246,13 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         t_env = StreamTableEnvironment.create(self.env)
         t_env.register_table_sink(
             'Results',
-            CsvTableSink(field_names, field_types,
-                         os.path.join('{}/{}.csv'.format(tmp_dir, round(time.time())))))
+            CsvTableSink(
+                field_names,
+                field_types,
+                os.path.join(f'{tmp_dir}/{round(time.time())}.csv'),
+            ),
+        )
+
         execution_result = exec_insert_table(
             t_env.from_elements([(1, 'Hi', 'Hello')], ['a', 'b', 'c']),
             'Results')
@@ -340,7 +345,7 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
 
     def test_read_text_file(self):
         texts = ["Mike", "Marry", "Ted", "Jack", "Bob", "Henry"]
-        text_file_path = self.tempdir + '/text_file'
+        text_file_path = f'{self.tempdir}/text_file'
         with open(text_file_path, 'a') as f:
             for text in texts:
                 f.write(text)
@@ -368,7 +373,10 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
     def test_add_python_file(self):
         import uuid
         env = self.env
-        python_file_dir = os.path.join(self.tempdir, "python_file_dir_" + str(uuid.uuid4()))
+        python_file_dir = os.path.join(
+            self.tempdir, f"python_file_dir_{str(uuid.uuid4())}"
+        )
+
         os.mkdir(python_file_dir)
         python_file_path = os.path.join(python_file_dir, "test_dep1.py")
         with open(python_file_path, 'w') as f:
@@ -379,13 +387,13 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
             return add_two(value)
 
         get_j_env_configuration(env._j_stream_execution_environment).\
-            setString("taskmanager.numberOfTaskSlots", "10")
+                setString("taskmanager.numberOfTaskSlots", "10")
         env.add_python_file(python_file_path)
         ds = env.from_collection([1, 2, 3, 4, 5])
         ds = ds.map(plus_two_map, Types.LONG()) \
-               .slot_sharing_group("data_stream") \
-               .map(lambda i: i, Types.LONG()) \
-               .slot_sharing_group("table")
+                   .slot_sharing_group("data_stream") \
+                   .map(lambda i: i, Types.LONG()) \
+                   .slot_sharing_group("table")
 
         python_file_path = os.path.join(python_file_dir, "test_dep2.py")
         with open(python_file_path, 'w') as f:
@@ -405,10 +413,10 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         add_three = udf(plus_three, result_type=DataTypes.BIGINT())
 
         tab = t_env.from_data_stream(ds, 'a') \
-                   .select(add_three(col('a')))
+                       .select(add_three(col('a')))
         t_env.to_append_stream(tab, Types.ROW([Types.LONG()])) \
-             .map(lambda i: i[0]) \
-             .add_sink(self.test_sink)
+                 .map(lambda i: i[0]) \
+                 .add_sink(self.test_sink)
         env.execute("test add_python_file")
         result = self.test_sink.get_results(True)
         expected = ['6', '7', '8', '9', '10']
@@ -419,7 +427,10 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
     def test_add_python_file_2(self):
         import uuid
         env = self.env
-        python_file_dir = os.path.join(self.tempdir, "python_file_dir_" + str(uuid.uuid4()))
+        python_file_dir = os.path.join(
+            self.tempdir, f"python_file_dir_{str(uuid.uuid4())}"
+        )
+
         os.mkdir(python_file_dir)
         python_file_path = os.path.join(python_file_dir, "test_dep1.py")
         with open(python_file_path, 'w') as f:
@@ -430,13 +441,13 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
             return add_two(value)
 
         get_j_env_configuration(env._j_stream_execution_environment).\
-            setString("taskmanager.numberOfTaskSlots", "10")
+                setString("taskmanager.numberOfTaskSlots", "10")
         env.add_python_file(python_file_path)
         ds = env.from_collection([1, 2, 3, 4, 5])
         ds = ds.map(plus_two_map, Types.LONG()) \
-               .slot_sharing_group("data_stream") \
-               .map(lambda i: i, Types.LONG()) \
-               .slot_sharing_group("table")
+                   .slot_sharing_group("data_stream") \
+                   .map(lambda i: i, Types.LONG()) \
+                   .slot_sharing_group("table")
 
         python_file_path = os.path.join(python_file_dir, "test_dep2.py")
         with open(python_file_path, 'w') as f:
@@ -456,7 +467,7 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         add_three = udf(plus_three, result_type=DataTypes.BIGINT())
 
         tab = t_env.from_data_stream(ds, col('a')) \
-                   .select(add_three(col('a')))
+                       .select(add_three(col('a')))
         result = [i[0] for i in tab.execute().collect()]
         expected = [6, 7, 8, 9, 10]
         result.sort()
@@ -487,11 +498,17 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         import uuid
         tmp_dir = self.tempdir
         env = self.env
-        requirements_txt_path = os.path.join(tmp_dir, "requirements_txt_" + str(uuid.uuid4()))
+        requirements_txt_path = os.path.join(
+            tmp_dir, f"requirements_txt_{str(uuid.uuid4())}"
+        )
+
         with open(requirements_txt_path, 'w') as f:
             f.write("python-package1==0.0.0")
 
-        requirements_dir_path = os.path.join(tmp_dir, "requirements_dir_" + str(uuid.uuid4()))
+        requirements_dir_path = os.path.join(
+            tmp_dir, f"requirements_dir_{str(uuid.uuid4())}"
+        )
+
         os.mkdir(requirements_dir_path)
         package_file_name = "python-package1-0.0.0.tar.gz"
         with open(os.path.join(requirements_dir_path, package_file_name), 'wb') as f:
@@ -533,12 +550,12 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         import shutil
         tmp_dir = self.tempdir
         env = self.env
-        archive_dir_path = os.path.join(tmp_dir, "archive_" + str(uuid.uuid4()))
+        archive_dir_path = os.path.join(tmp_dir, f"archive_{str(uuid.uuid4())}")
         os.mkdir(archive_dir_path)
         with open(os.path.join(archive_dir_path, "data.txt"), 'w') as f:
             f.write("2")
         archive_file_path = \
-            shutil.make_archive(os.path.dirname(archive_dir_path), 'zip', archive_dir_path)
+                shutil.make_archive(os.path.dirname(archive_dir_path), 'zip', archive_dir_path)
         env.add_python_archive(archive_file_path, "data")
 
         def add_from_file(i):
@@ -581,9 +598,12 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
     def test_add_jars(self):
         # find kafka connector jars
         flink_source_root = _find_flink_source_root()
-        jars_abs_path = flink_source_root + '/flink-connectors/flink-sql-connector-kafka'
-        specific_jars = glob.glob(jars_abs_path + '/target/flink*.jar')
-        specific_jars = ['file://' + specific_jar for specific_jar in specific_jars]
+        jars_abs_path = (
+            f'{flink_source_root}/flink-connectors/flink-sql-connector-kafka'
+        )
+
+        specific_jars = glob.glob(f'{jars_abs_path}/target/flink*.jar')
+        specific_jars = [f'file://{specific_jar}' for specific_jar in specific_jars]
 
         self.env.add_jars(*specific_jars)
         source_topic = 'test_source_topic'
@@ -592,7 +612,7 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
 
         # Test for kafka consumer
         deserialization_schema = JsonRowDeserializationSchema.builder() \
-            .type_info(type_info=type_info).build()
+                .type_info(type_info=type_info).build()
 
         # Will get a ClassNotFoundException if not add the kafka connector into the pipeline jars.
         kafka_consumer = FlinkKafkaConsumer(source_topic, deserialization_schema, props)
@@ -602,9 +622,12 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
     def test_add_classpaths(self):
         # find kafka connector jars
         flink_source_root = _find_flink_source_root()
-        jars_abs_path = flink_source_root + '/flink-connectors/flink-sql-connector-kafka'
-        specific_jars = glob.glob(jars_abs_path + '/target/flink*.jar')
-        specific_jars = ['file://' + specific_jar for specific_jar in specific_jars]
+        jars_abs_path = (
+            f'{flink_source_root}/flink-connectors/flink-sql-connector-kafka'
+        )
+
+        specific_jars = glob.glob(f'{jars_abs_path}/target/flink*.jar')
+        specific_jars = [f'file://{specific_jar}' for specific_jar in specific_jars]
 
         self.env.add_classpaths(*specific_jars)
         source_topic = 'test_source_topic'
@@ -613,7 +636,7 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
 
         # Test for kafka consumer
         deserialization_schema = JsonRowDeserializationSchema.builder() \
-            .type_info(type_info=type_info).build()
+                .type_info(type_info=type_info).build()
 
         # It Will raise a ClassNotFoundException if the kafka connector is not added into the
         # pipeline classpaths.
@@ -622,7 +645,10 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         self.env.get_execution_plan()
 
     def test_generate_stream_graph_with_dependencies(self):
-        python_file_dir = os.path.join(self.tempdir, "python_file_dir_" + str(uuid.uuid4()))
+        python_file_dir = os.path.join(
+            self.tempdir, f"python_file_dir_{str(uuid.uuid4())}"
+        )
+
         os.mkdir(python_file_dir)
         python_file_path = os.path.join(python_file_dir, "test_stream_dependency_manage_lib.py")
         with open(python_file_path, 'w') as f:
@@ -652,12 +678,12 @@ class StreamExecutionEnvironmentTests(PyFlinkTestCase):
         test_stream_sink = add_from_file_map.add_sink(self.test_sink).name("Test Sink")
         test_stream_sink.set_parallelism(4)
 
-        archive_dir_path = os.path.join(self.tempdir, "archive_" + str(uuid.uuid4()))
+        archive_dir_path = os.path.join(self.tempdir, f"archive_{str(uuid.uuid4())}")
         os.mkdir(archive_dir_path)
         with open(os.path.join(archive_dir_path, "data.txt"), 'w') as f:
             f.write("3")
         archive_file_path = \
-            shutil.make_archive(os.path.dirname(archive_dir_path), 'zip', archive_dir_path)
+                shutil.make_archive(os.path.dirname(archive_dir_path), 'zip', archive_dir_path)
         env.add_python_archive(archive_file_path, "data")
 
         nodes = eval(env.get_execution_plan())['nodes']
